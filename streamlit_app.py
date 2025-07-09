@@ -570,7 +570,7 @@ with st.sidebar:
                 )
         else:
             # Show selected predefined range
-            st.info(f"Using predefined range: {date_range_options[date_range_type]}")
+            st.info(f"Predefined range: {date_range_options[date_range_type]}")
     
     st.write("---")
     
