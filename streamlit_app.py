@@ -751,7 +751,7 @@ st.info(
     
     Current Dataset: {selected_dataset} ({current_dataset_config['dataset_id']}.{current_dataset_config['table_id']})
 """,
-    icon="🎯"
+    icon="🚀"
 )
 
 
