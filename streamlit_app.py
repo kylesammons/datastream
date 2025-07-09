@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from google.cloud import bigquery
 from google.oauth2 import service_account
+from google.auth import default
 import time
 import json
 from datetime import datetime, date, timedelta
@@ -16,6 +17,9 @@ st.set_page_config(
     layout="wide", 
     initial_sidebar_state="expanded"
 )
+
+# Project ID - you can also put this in secrets or environment variable
+PROJECT_ID = "trimark-tdp"
 
 # Field descriptions and exclusions for each dataset
 FIELD_CONFIGURATIONS = {
@@ -105,21 +109,21 @@ FIELD_CONFIGURATIONS = {
 # Dataset configurations
 DATASETS = {
     "Paid Media": {
-        "project_id": "trimark-tdp",
+        "project_id": PROJECT_ID,
         "dataset_id": "master",
         "table_id": "all_paidmedia",
         "predefined_date_ranges": ["previous_month", "prior_month", "previous_month_previous_year"],
         "averaged_metrics": ['cpm', 'cpc', 'ctr', 'cpvv']
     },
     "GA4": {
-        "project_id": "trimark-tdp",
+        "project_id": PROJECT_ID,
         "dataset_id": "master",
         "table_id": "all_ga4",
         "predefined_date_ranges": ["previous_month", "prior_month", "previous_month_previous_year"],
         "averaged_metrics": []
     },
     "Leads": {
-        "project_id": "trimark-tdp",
+        "project_id": PROJECT_ID,
         "dataset_id": "master",
         "table_id": "all_leads",
         "predefined_date_ranges": ["previous_month", "prior_month", "previous_month_previous_year"],
@@ -132,19 +136,115 @@ def format_field_name(field_name):
     """Format field names by removing underscores and capitalizing words"""
     return field_name.replace('_', ' ').title()
 
-# BigQuery Creds
+# BigQuery Creds - Deployment Ready
 @st.cache_resource
 def init_bigquery_client():
     """Initialize BigQuery client with service account credentials"""
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            '/Users/trimark/Desktop/Jupyter_Notebooks/trimark-tdp-87c89fbd0816.json'
-        )
-        client = bigquery.Client(credentials=credentials, project=list(DATASETS.values())[0]["project_id"])
+        credentials = None
+        auth_method = ""
+        
+        # Method 1: Try Streamlit secrets (for deployment)
+        try:
+            if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+                credentials = service_account.Credentials.from_service_account_info(
+                    st.secrets["gcp_service_account"]
+                )
+                auth_method = "Streamlit secrets"
+        except Exception as e:
+            pass  # Continue to next method
+        
+        # Method 2: Try environment variable (recommended for local)
+        if not credentials:
+            try:
+                credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+                if credentials_path and os.path.exists(credentials_path):
+                    credentials = service_account.Credentials.from_service_account_file(credentials_path)
+                    auth_method = f"Environment variable: {credentials_path}"
+            except Exception as e:
+                pass  # Continue to next method
+        
+        # Method 3: Try hardcoded path (fallback for local development)
+        if not credentials:
+            try:
+                hardcoded_path = '/Users/trimark/Desktop/Jupyter_Notebooks/trimark-tdp-87c89fbd0816.json'
+                if os.path.exists(hardcoded_path):
+                    credentials = service_account.Credentials.from_service_account_file(hardcoded_path)
+                    auth_method = f"Hardcoded path: {hardcoded_path}"
+            except Exception as e:
+                pass  # Continue to next method
+        
+        # Method 4: Try default credentials (for Google Cloud environments)
+        if not credentials:
+            try:
+                credentials, project = default()
+                auth_method = "Default Google Cloud credentials"
+            except Exception as e:
+                pass
+        
+        if not credentials:
+            raise Exception("No valid credentials found. Please check your setup.")
+        
+        # Use project ID from secrets, environment, or default
+        project_id = PROJECT_ID
+        if hasattr(st, 'secrets') and 'project_id' in st.secrets:
+            project_id = st.secrets["project_id"]
+        elif os.getenv('GOOGLE_CLOUD_PROJECT'):
+            project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
+        
+        client = bigquery.Client(credentials=credentials, project=project_id)
+        
+        # Test the connection
+        try:
+            # Simple query to test connection
+            test_query = "SELECT 1 as test_connection LIMIT 1"
+            client.query(test_query).result()
+            st.success(f"✅ BigQuery connected successfully using: {auth_method}")
+        except Exception as e:
+            st.warning(f"⚠️ BigQuery connection test failed: {str(e)}")
+        
         return client
+        
     except Exception as e:
-        st.error(f"Error initializing BigQuery client: {str(e)}")
-        st.error("Make sure the service account file exists at the specified path")
+        st.error(f"❌ Error initializing BigQuery client: {str(e)}")
+        
+        # Show helpful setup instructions
+        with st.expander("🔧 Authentication Setup Instructions", expanded=True):
+            st.markdown("""
+            ### For Local Development:
+            **Option 1: Environment Variable (Recommended)**
+            ```bash
+            export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/credentials.json"
+            ```
+            
+            **Option 2: Place credentials file at:**
+            ```
+            /Users/trimark/Desktop/Jupyter_Notebooks/trimark-tdp-87c89fbd0816.json
+            ```
+            
+            ### For Streamlit Cloud Deployment:
+            1. Go to your app settings in Streamlit Cloud
+            2. Add the following to your secrets.toml:
+            ```toml
+            [gcp_service_account]
+            type = "service_account"
+            project_id = "your-project-id"
+            private_key_id = "your-private-key-id"
+            private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_PRIVATE_KEY\\n-----END PRIVATE KEY-----\\n"
+            client_email = "your-service-account-email"
+            client_id = "your-client-id"
+            auth_uri = "https://accounts.google.com/o/oauth2/auth"
+            token_uri = "https://oauth2.googleapis.com/token"
+            auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+            client_x509_cert_url = "your-cert-url"
+            
+            project_id = "your-project-id"
+            ```
+            
+            ### For Google Cloud Platform:
+            - The app will automatically use default credentials when running on GCP
+            """)
+        
         return None
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
@@ -184,44 +284,6 @@ def get_table_schema(dataset_config):
     except Exception as e:
         st.error(f"Error getting table schema: {str(e)}")
         return {}, {}, []
-
-@st.cache_data(ttl=3600)
-def get_schema_for_display(dataset_name, dataset_config):
-    """Get schema information formatted for display table"""
-    client = init_bigquery_client()
-    if not client:
-        return pd.DataFrame()
-    
-    try:
-        table_ref = client.dataset(dataset_config["dataset_id"]).table(dataset_config["table_id"])
-        table = client.get_table(table_ref)
-        
-        schema_data = []
-        field_config = FIELD_CONFIGURATIONS.get(dataset_name, {})
-        descriptions = field_config.get("descriptions", {})
-        excluded_fields = field_config.get("excluded_fields", [])
-        
-        for field in table.schema:
-            field_name = field.name
-            
-            # Skip excluded fields
-            if field_name in excluded_fields:
-                continue
-                
-            # Skip predefined date range boolean fields
-            if field_name in dataset_config["predefined_date_ranges"]:
-                continue
-            
-            schema_data.append({
-                "Field Name": format_field_name(field_name),
-                "Data Type": field.field_type,
-                "Description": descriptions.get(field_name, "No description available")
-            })
-        
-        return pd.DataFrame(schema_data)
-    except Exception as e:
-        st.error(f"Error getting schema for display: {str(e)}")
-        return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def get_schema_for_display(dataset_name, dataset_config):
