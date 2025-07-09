@@ -145,7 +145,6 @@ def init_bigquery_client():
                 credentials = service_account.Credentials.from_service_account_info(
                     st.secrets["gcp_service_account"]
                 )
-                st.success("✅ Using Streamlit secrets for BigQuery authentication")
             except Exception as e:
                 st.error(f"❌ Error loading credentials from Streamlit secrets: {str(e)}")
                 return None
@@ -169,7 +168,6 @@ def init_bigquery_client():
             test_query = "SELECT 1 as test_connection"
             test_job = client.query(test_query)
             test_result = test_job.result()
-            st.success("🎉 BigQuery connection successful!")
             return client
         except Exception as e:
             st.error(f"❌ BigQuery connection test failed: {str(e)}")
