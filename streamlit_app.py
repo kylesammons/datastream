@@ -487,7 +487,7 @@ if "filters" not in st.session_state:
 with st.sidebar:
     st.image("Waves-Logo_Color.svg", width=200)
     st.markdown("<br>", unsafe_allow_html=True)
-    st.header("🔧 Query Builder")
+    st.header("Query Builder")
     
     # Dataset selection
     st.subheader("🗂️ Dataset")
@@ -690,7 +690,7 @@ with st.sidebar:
     st.write("---")
     
     # Build query button
-    if st.button("🔍 Build Query", type="primary", use_container_width=True):
+    if st.button("🔧 Build Query", type="primary", use_container_width=True):
         if not selected_dimensions and not selected_metrics:
             st.error("Please select at least one dimension or metric")
         else:
