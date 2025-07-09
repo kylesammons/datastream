@@ -730,9 +730,7 @@ with st.sidebar:
                 filters=filter_conditions
             )
             st.session_state.current_query = query
-            
-            with st.spinner("Executing query..."):
-                st.session_state.query_results = execute_query(query, preview_limit)
+            st.session_state.query_results = execute_query(query, preview_limit)
     
     # Clear results
     if st.button("🗑️ Clear Results", type="secondary", use_container_width=True):
