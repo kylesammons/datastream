@@ -497,6 +497,7 @@ if "filters" not in st.session_state:
 
 # Sidebar for selections
 with st.sidebar:
+    st.image("Waves-Logo_Color.svg", width=200)
     st.header("🔧 Query Builder")
     
     # Dataset selection
