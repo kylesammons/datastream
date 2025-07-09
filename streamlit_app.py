@@ -665,7 +665,6 @@ with st.sidebar:
                     "value": filter_value
                 }
                 st.session_state.filters.append(new_filter)
-                st.success(f"Filter added: {format_field_name(filter_field)} {operators[filter_operator]} {filter_value}")
     
     # Display current filters
     if st.session_state.filters:
