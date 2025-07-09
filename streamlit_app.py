@@ -145,8 +145,17 @@ def init_bigquery_client():
                 )
                 st.success("Using Streamlit secrets for BigQuery authentication")
         except Exception as e:
+            st.warning(f"Could not load credentials from secrets: {str(e)}")
+            # You can add fallback credential loading here if needed
+            # For example, loading from environment variables or service account key file
+        
+        # Initialize client with credentials (will use default credentials if None)
         client = bigquery.Client(credentials=credentials, project=list(DATASETS.values())[0]["project_id"])
         return client
+    
+    except Exception as e:
+        st.error(f"Error initializing BigQuery client: {str(e)}")
+        return None
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_table_schema(dataset_config):
