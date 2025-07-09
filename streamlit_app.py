@@ -171,6 +171,7 @@ def init_bigquery_client():
                 if os.path.exists(hardcoded_path):
                     credentials = service_account.Credentials.from_service_account_file(hardcoded_path)
                     auth_method = f"Hardcoded path: {hardcoded_path}"
+                # If file doesn't exist, just continue to next method without error
             except Exception as e:
                 pass  # Continue to next method
         
@@ -221,6 +222,10 @@ def init_bigquery_client():
             ```
             /Users/trimark/Desktop/Jupyter_Notebooks/trimark-tdp-87c89fbd0816.json
             ```
+            *(Create the directories if they don't exist)*
+            
+            **Option 3: Use a different path**
+            Update the `hardcoded_path` variable in the code to point to your actual credentials file location.
             
             ### For Streamlit Cloud Deployment:
             1. Go to your app settings in Streamlit Cloud
@@ -228,7 +233,7 @@ def init_bigquery_client():
             ```toml
             [gcp_service_account]
             type = "service_account"
-            project_id = "your-project-id"
+            project_id = "trimark-tdp"
             private_key_id = "your-private-key-id"
             private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_PRIVATE_KEY\\n-----END PRIVATE KEY-----\\n"
             client_email = "your-service-account-email"
@@ -238,11 +243,17 @@ def init_bigquery_client():
             auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
             client_x509_cert_url = "your-cert-url"
             
-            project_id = "your-project-id"
+            project_id = "trimark-tdp"
             ```
             
             ### For Google Cloud Platform:
             - The app will automatically use default credentials when running on GCP
+            
+            ### Quick Setup Options:
+            1. **Download your service account key** from Google Cloud Console
+            2. **Either:** Set the environment variable to point to it
+            3. **Or:** Place it at the hardcoded path shown above
+            4. **Or:** Update the hardcoded path in the code to match your file location
             """)
         
         return None
