@@ -42,7 +42,7 @@ FIELD_CONFIGURATIONS = {
             "cost": "Total cost spent on advertising",
             "CPM": "Cost per thousand impressions",
             "CPC": "Cost per click",
-            "CTR": "Click-through rate as a percentage",
+            "CTR": "Click-through rate",
             "CPVV": "Cost per video view",
             "conversions": "Number of conversions tracked",
             "CPCONV": "Cost per conversion"
