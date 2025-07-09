@@ -17,6 +17,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Authentication check - MUST BE EARLY IN THE CODE
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    # Create columns to center and size the login form
+    login_col, left_spacer, right_spacer = st.columns([2, 3, 2])
+    
+    with login_col:
+        st.markdown("<br>",unsafe_allow_html=True)
+        st.markdown("<br>",unsafe_allow_html=True)
+        st.markdown("<br>",unsafe_allow_html=True)
+        st.markdown('<p style="font-size: 1.2rem; color: #2c3e50; margin-bottom: 18px;">🔐 Please enter the password to access the dashboard</p>', unsafe_allow_html=True)
+        
+        password = st.text_input("Password:", type="password", key="password_input")
+        
+        if st.button("Login", type="primary", use_container_width=True):
+            if password == "waves2025":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect password. Please try again.")
+    
+    # Stop execution here if not authenticated
+    st.stop()
+
 # Field descriptions and exclusions for each dataset
 FIELD_CONFIGURATIONS = {
     "Paid Media": {
@@ -214,44 +240,6 @@ def get_table_schema(dataset_config):
     except Exception as e:
         st.error(f"Error getting table schema: {str(e)}")
         return {}, {}, []
-
-@st.cache_data(ttl=3600)
-def get_schema_for_display(dataset_name, dataset_config):
-    """Get schema information formatted for display table"""
-    client = init_bigquery_client()
-    if not client:
-        return pd.DataFrame()
-    
-    try:
-        table_ref = client.dataset(dataset_config["dataset_id"]).table(dataset_config["table_id"])
-        table = client.get_table(table_ref)
-        
-        schema_data = []
-        field_config = FIELD_CONFIGURATIONS.get(dataset_name, {})
-        descriptions = field_config.get("descriptions", {})
-        excluded_fields = field_config.get("excluded_fields", [])
-        
-        for field in table.schema:
-            field_name = field.name
-            
-            # Skip excluded fields
-            if field_name in excluded_fields:
-                continue
-                
-            # Skip predefined date range boolean fields
-            if field_name in dataset_config["predefined_date_ranges"]:
-                continue
-            
-            schema_data.append({
-                "Field Name": format_field_name(field_name),
-                "Data Type": field.field_type,
-                "Description": descriptions.get(field_name, "No description available")
-            })
-        
-        return pd.DataFrame(schema_data)
-    except Exception as e:
-        st.error(f"Error getting schema for display: {str(e)}")
-        return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def get_schema_for_display(dataset_name, dataset_config):
