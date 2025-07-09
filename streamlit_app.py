@@ -132,29 +132,51 @@ def format_field_name(field_name):
     """Format field names by removing underscores and capitalizing words"""
     return field_name.replace('_', ' ').title()
 
-# BigQuery Creds
+# BigQuery Creds - UPDATED VERSION
 @st.cache_resource
 def init_bigquery_client():
     """Initialize BigQuery client with service account credentials"""
     try:
         credentials = None
-        try:
-            if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+        
+        # Try to load from Streamlit secrets
+        if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+            try:
                 credentials = service_account.Credentials.from_service_account_info(
                     st.secrets["gcp_service_account"]
                 )
-                st.success("Using Streamlit secrets for BigQuery authentication")
-        except Exception as e:
-            st.warning(f"Could not load credentials from secrets: {str(e)}")
-            # You can add fallback credential loading here if needed
-            # For example, loading from environment variables or service account key file
+                st.success("✅ Using Streamlit secrets for BigQuery authentication")
+            except Exception as e:
+                st.error(f"❌ Error loading credentials from Streamlit secrets: {str(e)}")
+                return None
+        else:
+            st.error("❌ No GCP service account found in Streamlit secrets.")
+            st.info("""
+            🔧 **To fix this:**
+            1. Go to your Streamlit app settings
+            2. Navigate to 'Secrets' section  
+            3. Add your service account JSON with key 'gcp_service_account'
+            """)
+            return None
         
-        # Initialize client with credentials (will use default credentials if None)
-        client = bigquery.Client(credentials=credentials, project=list(DATASETS.values())[0]["project_id"])
-        return client
-    
+        # Initialize client with credentials
+        project_id = list(DATASETS.values())[0]["project_id"]
+        client = bigquery.Client(credentials=credentials, project=project_id)
+        
+        # Test the connection
+        try:
+            # Simple test query to verify connection works
+            test_query = "SELECT 1 as test_connection"
+            test_job = client.query(test_query)
+            test_result = test_job.result()
+            st.success("🎉 BigQuery connection successful!")
+            return client
+        except Exception as e:
+            st.error(f"❌ BigQuery connection test failed: {str(e)}")
+            return None
+            
     except Exception as e:
-        st.error(f"Error initializing BigQuery client: {str(e)}")
+        st.error(f"❌ Error initializing BigQuery client: {str(e)}")
         return None
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
