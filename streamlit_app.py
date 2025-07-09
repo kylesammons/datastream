@@ -137,15 +137,16 @@ def format_field_name(field_name):
 def init_bigquery_client():
     """Initialize BigQuery client with service account credentials"""
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            '/Users/trimark/Desktop/Jupyter_Notebooks/trimark-tdp-87c89fbd0816.json'
-        )
+        credentials = None
+        try:
+            if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+                credentials = service_account.Credentials.from_service_account_info(
+                    st.secrets["gcp_service_account"]
+                )
+                st.success("Using Streamlit secrets for BigQuery authentication")
+        except Exception as e:
         client = bigquery.Client(credentials=credentials, project=list(DATASETS.values())[0]["project_id"])
         return client
-    except Exception as e:
-        st.error(f"Error initializing BigQuery client: {str(e)}")
-        st.error("Make sure the service account file exists at the specified path")
-        return None
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_table_schema(dataset_config):
