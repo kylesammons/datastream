@@ -8,6 +8,7 @@ import json
 from datetime import datetime, date, timedelta
 from streamlit_extras.metric_cards import style_metric_cards
 import math
+import plotly.express as px
 
 # Set Streamlit page config
 st.set_page_config(
@@ -949,3 +950,126 @@ if not st.session_state.query_results.empty:
                     mime="text/csv",
                     type="primary"
                 )
+    
+    # Add line break after download button
+    st.write("")
+    st.write("---")
+    
+    # Graphing section
+    if not st.session_state.query_results.empty and selected_metrics:
+        
+        # Check if date is one of the selected dimensions
+        has_date_dimension = any(dim in date_fields for dim in selected_dimensions)
+        
+        # Separate metrics by aggregation type
+        summed_metrics = [m for m in selected_metrics if m.lower() not in current_dataset_config["averaged_metrics"]]
+        averaged_metrics = [m for m in selected_metrics if m.lower() in current_dataset_config["averaged_metrics"]]
+        cost_metrics = [m for m in selected_metrics if 'cost' in m.lower()]
+        
+        # Remove cost metrics from summed metrics to show separately
+        summed_metrics = [m for m in summed_metrics if m not in cost_metrics]
+        
+        if has_date_dimension:
+            # Time series graphs
+            date_column = next(dim for dim in selected_dimensions if dim in date_fields)
+            
+            # Prepare data for plotting - sort by date
+            plot_data = st.session_state.query_results.sort_values(date_column)
+            
+            # Graph 1: Summed metrics (line chart)
+            if summed_metrics:
+                st.subheader("Trends - Summed Metrics")
+                fig_summed = px.line(
+                    plot_data, 
+                    x=date_column, 
+                    y=summed_metrics,
+                    title="",
+                    markers=True
+                )
+                fig_summed.update_traces(textposition="top center")
+                fig_summed.update_layout(
+                    showlegend=True,
+                    height=400,
+                    margin=dict(t=20)
+                )
+                st.plotly_chart(fig_summed, use_container_width=True)
+            
+            # Graph 2: Averaged metrics (line chart)
+            if averaged_metrics:
+                st.subheader("Trends - Averaged Metrics")
+                fig_averaged = px.line(
+                    plot_data, 
+                    x=date_column, 
+                    y=averaged_metrics,
+                    title="",
+                    markers=True
+                )
+                fig_averaged.update_traces(textposition="top center")
+                fig_averaged.update_layout(
+                    showlegend=True,
+                    height=400,
+                    margin=dict(t=20)
+                )
+                st.plotly_chart(fig_averaged, use_container_width=True)
+            
+            # Graph 3: Cost metrics (bar chart)
+            if cost_metrics:
+                st.subheader("Cost Metrics")
+                fig_cost = px.bar(
+                    plot_data, 
+                    x=date_column, 
+                    y=cost_metrics,
+                    title=""
+                )
+                fig_cost.update_traces(texttemplate='%{y}', textposition='outside')
+                fig_cost.update_layout(
+                    showlegend=True,
+                    height=400,
+                    margin=dict(t=20)
+                )
+                st.plotly_chart(fig_cost, use_container_width=True)
+                
+        else:
+            # Bar graphs with dimension selector
+            if len(selected_dimensions) > 0:
+                # Dropdown to select dimension for x-axis
+                selected_chart_dimension = st.selectbox(
+                    "Select dimension for charts:",
+                    options=selected_dimensions,
+                    format_func=format_field_name,
+                    key="chart_dimension_selector"
+                )
+                
+                # Graph 1: Summed metrics (bar chart)
+                if summed_metrics:
+                    st.subheader("Summed Metrics")
+                    fig_summed = px.bar(
+                        st.session_state.query_results, 
+                        x=selected_chart_dimension, 
+                        y=summed_metrics,
+                        title=""
+                    )
+                    fig_summed.update_traces(texttemplate='%{y}', textposition='outside')
+                    fig_summed.update_layout(
+                        showlegend=True,
+                        height=400,
+                        margin=dict(t=20)
+                    )
+                    st.plotly_chart(fig_summed, use_container_width=True)
+                
+                # Graph 2: Averaged metrics (bar chart)
+                if averaged_metrics:
+                    st.subheader("Averaged Metrics")
+                    fig_averaged = px.bar(
+                        st.session_state.query_results, 
+                        x=selected_chart_dimension, 
+                        y=averaged_metrics,
+                        title=""
+                    )
+                    fig_averaged.update_traces(texttemplate='%{y}', textposition='outside')
+                    fig_averaged.update_layout(
+                        showlegend=True,
+                        height=400,
+                        margin=dict(t=20)
+                    )
+                    st.plotly_chart(fig_averaged, use_container_width=True)
