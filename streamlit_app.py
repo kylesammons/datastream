@@ -632,8 +632,10 @@ with st.sidebar:
     # Add new filter
     with st.expander("➕ Add Filter", expanded=False):
         st.caption("Add filters to narrow down your data")
-        # Field selection on its own line
-        all_fields = list(dimensions_dict.keys()) + list(metrics_dict.keys())
+        # Field selection on its own line - exclude date fields
+        non_date_dimensions = {k: v for k, v in dimensions_dict.items() 
+                              if v not in ['DATE', 'DATETIME', 'TIMESTAMP']}
+        all_fields = list(non_date_dimensions.keys()) + list(metrics_dict.keys())
         filter_field = st.selectbox(
             "Field",
             options=all_fields,
@@ -641,16 +643,16 @@ with st.sidebar:
             key="new_filter_field"
         )
         
-        # Check if selected field is a dimension (for multi-select dropdown)
-        is_dimension = filter_field in dimensions_dict
+        # Check if selected field is a string dimension (excluding date fields) for multi-select dropdown
+        is_string_dimension = (filter_field in non_date_dimensions and 
+                              non_date_dimensions[filter_field] == 'STRING')
         
-        if is_dimension:
-            # For dimensions, use multi-select dropdown
+        if is_string_dimension:
+            # For string dimensions, use multi-select dropdown
             st.write("**Multi-select filter (choose one or more values):**")
             
             # Get unique values for this dimension
-            with st.spinner(f"Loading values for {format_field_name(filter_field)}..."):
-                dimension_values = get_dimension_values(current_dataset_config, filter_field)
+            dimension_values = get_dimension_values(current_dataset_config, filter_field)
             
             if dimension_values:
                 selected_values = st.multiselect(
@@ -660,7 +662,7 @@ with st.sidebar:
                     help=f"Choose one or more values to filter by. Leave empty to include all values."
                 )
                 
-                if st.button("Add Multi-Select Filter", key="add_multiselect_filter_btn"):
+                if st.button("Add Filter", key="add_multiselect_filter_btn"):
                     if selected_values:  # Only add if values are selected
                         new_filter = {
                             "field": filter_field,
@@ -675,19 +677,30 @@ with st.sidebar:
             else:
                 st.warning(f"No values found for {format_field_name(filter_field)}")
         else:
-            # For metrics, use traditional operator/value input
+            # For metrics, dates, and other field types, use traditional operator/value input
             col1, col2 = st.columns([1, 2])
             
             with col1:
-                # Numeric field operators
-                operators = {
-                    "equals": "=",
-                    "greater_than": ">",
-                    "less_than": "<",
-                    "greater_equal": ">=",
-                    "less_equal": "<=",
-                    "not_equals": "!="
-                }
+                # Different operators based on field type
+                if filter_field in metrics_dict:
+                    # Numeric field operators
+                    operators = {
+                        "equals": "=",
+                        "greater_than": ">",
+                        "less_than": "<",
+                        "greater_equal": ">=",
+                        "less_equal": "<=",
+                        "not_equals": "!="
+                    }
+                else:
+                    # String/Date field operators
+                    operators = {
+                        "equals": "=",
+                        "contains": "contains",
+                        "not_equals": "!=",
+                        "starts_with": "starts with",
+                        "ends_with": "ends with"
+                    }
                 
                 filter_operator = st.selectbox(
                     "Operator",
@@ -702,7 +715,7 @@ with st.sidebar:
                     key="new_filter_value"
                 )
             
-            if st.button("Add Metric Filter", key="add_metric_filter_btn"):
+            if st.button("Add Filter", key="add_traditional_filter_btn"):
                 if filter_field and filter_operator and filter_value:
                     new_filter = {
                         "field": filter_field,
