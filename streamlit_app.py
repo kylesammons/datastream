@@ -955,6 +955,7 @@ if not st.session_state.query_results.empty:
     
     # Graphing section
     if not st.session_state.query_results.empty and (selected_dimensions or selected_metrics):
+        # Use the aggregated data from display_df but work with original column names for logic
         df = st.session_state.query_results.copy()
         
         # Check if date is in selected dimensions
