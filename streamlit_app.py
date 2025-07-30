@@ -648,9 +648,6 @@ with st.sidebar:
                               non_date_dimensions[filter_field] == 'STRING')
         
         if is_string_dimension:
-            # For string dimensions, use multi-select dropdown
-            st.write("**Multi-select filter (choose one or more values):**")
-            
             # Get unique values for this dimension
             dimension_values = get_dimension_values(current_dataset_config, filter_field)
             
