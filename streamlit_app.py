@@ -318,6 +318,31 @@ def style_schema_dataframe(df, selected_dimensions, selected_metrics):
     
     return styled
 
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
+def get_dimension_values(dataset_config, dimension_field, limit=1000):
+    """Get unique values for a dimension field"""
+    client = init_bigquery_client()
+    if not client:
+        return []
+    
+    try:
+        query = f"""
+        SELECT DISTINCT {dimension_field}
+        FROM `{dataset_config['project_id']}.{dataset_config['dataset_id']}.{dataset_config['table_id']}`
+        WHERE {dimension_field} IS NOT NULL
+        ORDER BY {dimension_field}
+        LIMIT {limit}
+        """
+        
+        job_config = bigquery.QueryJobConfig()
+        query_job = client.query(query, job_config=job_config)
+        
+        df = query_job.to_dataframe()
+        return df[dimension_field].tolist()
+    except Exception as e:
+        st.error(f"Error getting dimension values for {dimension_field}: {str(e)}")
+        return []
+
 def build_query(dataset_config, start_date, end_date, predefined_range, dimensions, metrics, filters=None):
     """Build BigQuery SQL query based on dataset config and user selections"""
     
@@ -435,6 +460,15 @@ def build_filter_condition(field, operator, value):
         return f"{field} >= {value}"
     elif operator == "less_equal":
         return f"{field} <= {value}"
+    elif operator == "in":
+        # Handle multi-select values - expect value to be a list
+        if isinstance(value, list):
+            # Escape single quotes in values and wrap each in quotes
+            escaped_values = [f"'{str(v).replace(chr(39), chr(39)+chr(39))}'" for v in value]
+            return f"{field} IN ({', '.join(escaped_values)})"
+        else:
+            # Fallback for single value
+            return f"{field} = '{value}'"
     else:
         return f"{field} = '{value}'"
 
@@ -607,12 +641,44 @@ with st.sidebar:
             key="new_filter_field"
         )
         
-        # Operator and Value on the same line
-        col1, col2 = st.columns([1, 2])
+        # Check if selected field is a dimension (for multi-select dropdown)
+        is_dimension = filter_field in dimensions_dict
         
-        with col1:
-            # Show different operators based on field type
-            if filter_field in metrics_dict:
+        if is_dimension:
+            # For dimensions, use multi-select dropdown
+            st.write("**Multi-select filter (choose one or more values):**")
+            
+            # Get unique values for this dimension
+            with st.spinner(f"Loading values for {format_field_name(filter_field)}..."):
+                dimension_values = get_dimension_values(current_dataset_config, filter_field)
+            
+            if dimension_values:
+                selected_values = st.multiselect(
+                    f"Select {format_field_name(filter_field)} values",
+                    options=dimension_values,
+                    key="new_filter_values",
+                    help=f"Choose one or more values to filter by. Leave empty to include all values."
+                )
+                
+                if st.button("Add Multi-Select Filter", key="add_multiselect_filter_btn"):
+                    if selected_values:  # Only add if values are selected
+                        new_filter = {
+                            "field": filter_field,
+                            "operator": "in",
+                            "value": selected_values,
+                            "display_type": "multi_select"
+                        }
+                        st.session_state.filters.append(new_filter)
+                        st.rerun()
+                    else:
+                        st.warning("Please select at least one value to filter by.")
+            else:
+                st.warning(f"No values found for {format_field_name(filter_field)}")
+        else:
+            # For metrics, use traditional operator/value input
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
                 # Numeric field operators
                 operators = {
                     "equals": "=",
@@ -622,37 +688,30 @@ with st.sidebar:
                     "less_equal": "<=",
                     "not_equals": "!="
                 }
-            else:
-                # String field operators
-                operators = {
-                    "equals": "=",
-                    "contains": "contains",
-                    "not_equals": "!=",
-                    "starts_with": "starts with",
-                    "ends_with": "ends with"
-                }
+                
+                filter_operator = st.selectbox(
+                    "Operator",
+                    options=list(operators.keys()),
+                    format_func=lambda x: operators[x],
+                    key="new_filter_operator"
+                )
             
-            filter_operator = st.selectbox(
-                "Operator",
-                options=list(operators.keys()),
-                format_func=lambda x: operators[x],
-                key="new_filter_operator"
-            )
-        
-        with col2:
-            filter_value = st.text_input(
-                "Value",
-                key="new_filter_value"
-            )
-        
-        if st.button("Add Filter", key="add_filter_btn"):
-            if filter_field and filter_operator and filter_value:
-                new_filter = {
-                    "field": filter_field,
-                    "operator": filter_operator,
-                    "value": filter_value
-                }
-                st.session_state.filters.append(new_filter)
+            with col2:
+                filter_value = st.text_input(
+                    "Value",
+                    key="new_filter_value"
+                )
+            
+            if st.button("Add Metric Filter", key="add_metric_filter_btn"):
+                if filter_field and filter_operator and filter_value:
+                    new_filter = {
+                        "field": filter_field,
+                        "operator": filter_operator,
+                        "value": filter_value,
+                        "display_type": "traditional"
+                    }
+                    st.session_state.filters.append(new_filter)
+                    st.rerun()
     
     # Display current filters
     if st.session_state.filters:
@@ -660,13 +719,21 @@ with st.sidebar:
         for i, filter_item in enumerate(st.session_state.filters):
             col1, col2 = st.columns([4, 1])
             with col1:
-                operators_display = {
-                    "equals": "=", "contains": "contains", "not_equals": "!=",
-                    "starts_with": "starts with", "ends_with": "ends with",
-                    "greater_than": ">", "less_than": "<", 
-                    "greater_equal": ">=", "less_equal": "<="
-                }
-                st.write(f"• {format_field_name(filter_item['field'])} {operators_display[filter_item['operator']]} {filter_item['value']}")
+                if filter_item.get("display_type") == "multi_select":
+                    # Display multi-select filter
+                    values_display = ", ".join(str(v) for v in filter_item['value'][:3])  # Show first 3 values
+                    if len(filter_item['value']) > 3:
+                        values_display += f" (+ {len(filter_item['value']) - 3} more)"
+                    st.write(f"• {format_field_name(filter_item['field'])} in [{values_display}]")
+                else:
+                    # Display traditional filter
+                    operators_display = {
+                        "equals": "=", "contains": "contains", "not_equals": "!=",
+                        "starts_with": "starts with", "ends_with": "ends with",
+                        "greater_than": ">", "less_than": "<", 
+                        "greater_equal": ">=", "less_equal": "<="
+                    }
+                    st.write(f"• {format_field_name(filter_item['field'])} {operators_display[filter_item['operator']]} {filter_item['value']}")
             with col2:
                 if st.button("🗑️", key=f"delete_filter_{i}", help="Delete filter"):
                     st.session_state.filters.pop(i)
@@ -742,6 +809,8 @@ with col2:
         3. Choose dimensions - categorical fields to group your data by
         4. Choose metrics - numeric fields to aggregate (will be summed or averaged)
         5. Add filters - narrow down your data with field-specific filters
+           - **Dimensions**: Use multi-select dropdowns to filter by multiple values
+           - **Metrics**: Use traditional operators (=, >, <, etc.) with specific values
         6. Build your query and preview the results
         7. Download either the preview or full dataset
         """)
