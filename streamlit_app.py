@@ -8,7 +8,6 @@ import json
 from datetime import datetime, date, timedelta
 from streamlit_extras.metric_cards import style_metric_cards
 import math
-import plotly.express as px
 
 # Set Streamlit page config
 st.set_page_config(
@@ -952,124 +951,73 @@ if not st.session_state.query_results.empty:
                 )
     
     # Add line break after download button
-    st.write("")
     st.write("---")
     
     # Graphing section
-    if not st.session_state.query_results.empty and selected_metrics:
+    if not st.session_state.query_results.empty and (selected_dimensions or selected_metrics):
+        df = st.session_state.query_results.copy()
         
-        # Check if date is one of the selected dimensions
-        has_date_dimension = any(dim in date_fields for dim in selected_dimensions)
+        # Check if date is in selected dimensions
+        date_dimension = None
+        for dim in selected_dimensions:
+            if dim in date_fields:
+                date_dimension = dim
+                break
         
-        # Separate metrics by aggregation type
-        summed_metrics = [m for m in selected_metrics if m.lower() not in current_dataset_config["averaged_metrics"]]
-        averaged_metrics = [m for m in selected_metrics if m.lower() in current_dataset_config["averaged_metrics"]]
-        cost_metrics = [m for m in selected_metrics if 'cost' in m.lower()]
-        
-        # Remove cost metrics from summed metrics to show separately
-        summed_metrics = [m for m in summed_metrics if m not in cost_metrics]
-        
-        if has_date_dimension:
-            # Time series graphs
-            date_column = next(dim for dim in selected_dimensions if dim in date_fields)
+        if date_dimension and selected_metrics:
+            # Time series graphs when date is selected
+            df = df.sort_values(date_dimension)
             
-            # Prepare data for plotting - sort by date
-            plot_data = st.session_state.query_results.sort_values(date_column)
+            # Separate metrics by type (summed vs averaged)
+            summed_metrics = [m for m in selected_metrics if m.lower() not in current_dataset_config["averaged_metrics"]]
+            averaged_metrics = [m for m in selected_metrics if m.lower() in current_dataset_config["averaged_metrics"]]
+            cost_metrics = [m for m in selected_metrics if 'cost' in m.lower()]
             
-            # Graph 1: Summed metrics (line chart)
+            # Remove cost metrics from summed metrics to show separately
+            summed_metrics = [m for m in summed_metrics if m not in cost_metrics]
+            
+            # Summed metrics line chart
             if summed_metrics:
-                st.subheader("Trends - Summed Metrics")
-                fig_summed = px.line(
-                    plot_data, 
-                    x=date_column, 
-                    y=summed_metrics,
-                    title="",
-                    markers=True
-                )
-                fig_summed.update_traces(textposition="top center")
-                fig_summed.update_layout(
-                    showlegend=True,
-                    height=400,
-                    margin=dict(t=20)
-                )
-                st.plotly_chart(fig_summed, use_container_width=True)
+                st.subheader("Summed Metrics")
+                chart_data = df.set_index(date_dimension)[summed_metrics]
+                st.line_chart(chart_data, use_container_width=True)
             
-            # Graph 2: Averaged metrics (line chart)
+            # Averaged metrics line chart
             if averaged_metrics:
-                st.subheader("Trends - Averaged Metrics")
-                fig_averaged = px.line(
-                    plot_data, 
-                    x=date_column, 
-                    y=averaged_metrics,
-                    title="",
-                    markers=True
-                )
-                fig_averaged.update_traces(textposition="top center")
-                fig_averaged.update_layout(
-                    showlegend=True,
-                    height=400,
-                    margin=dict(t=20)
-                )
-                st.plotly_chart(fig_averaged, use_container_width=True)
+                st.subheader("Averaged Metrics")
+                chart_data = df.set_index(date_dimension)[averaged_metrics]
+                st.line_chart(chart_data, use_container_width=True)
             
-            # Graph 3: Cost metrics (bar chart)
+            # Cost metrics bar chart
             if cost_metrics:
                 st.subheader("Cost Metrics")
-                fig_cost = px.bar(
-                    plot_data, 
-                    x=date_column, 
-                    y=cost_metrics,
-                    title=""
-                )
-                fig_cost.update_traces(texttemplate='%{y}', textposition='outside')
-                fig_cost.update_layout(
-                    showlegend=True,
-                    height=400,
-                    margin=dict(t=20)
-                )
-                st.plotly_chart(fig_cost, use_container_width=True)
+                chart_data = df.set_index(date_dimension)[cost_metrics]
+                st.bar_chart(chart_data, use_container_width=True)
                 
-        else:
-            # Bar graphs with dimension selector
-            if len(selected_dimensions) > 0:
-                # Dropdown to select dimension for x-axis
-                selected_chart_dimension = st.selectbox(
-                    "Select dimension for charts:",
-                    options=selected_dimensions,
-                    format_func=format_field_name,
-                    key="chart_dimension_selector"
-                )
+        elif selected_dimensions and selected_metrics:
+            # Bar graphs when date is not selected
+            
+            # Create dropdown for dimension selection
+            dimension_for_chart = st.selectbox(
+                "Select dimension for chart:",
+                options=selected_dimensions,
+                format_func=format_field_name,
+                key="chart_dimension_selector"
+            )
+            
+            if dimension_for_chart:
+                # Separate metrics by type (summed vs averaged)
+                summed_metrics = [m for m in selected_metrics if m.lower() not in current_dataset_config["averaged_metrics"]]
+                averaged_metrics = [m for m in selected_metrics if m.lower() in current_dataset_config["averaged_metrics"]]
                 
-                # Graph 1: Summed metrics (bar chart)
+                # Summed metrics bar chart
                 if summed_metrics:
                     st.subheader("Summed Metrics")
-                    fig_summed = px.bar(
-                        st.session_state.query_results, 
-                        x=selected_chart_dimension, 
-                        y=summed_metrics,
-                        title=""
-                    )
-                    fig_summed.update_traces(texttemplate='%{y}', textposition='outside')
-                    fig_summed.update_layout(
-                        showlegend=True,
-                        height=400,
-                        margin=dict(t=20)
-                    )
-                    st.plotly_chart(fig_summed, use_container_width=True)
+                    chart_data = df.set_index(dimension_for_chart)[summed_metrics]
+                    st.bar_chart(chart_data, use_container_width=True)
                 
-                # Graph 2: Averaged metrics (bar chart)
+                # Averaged metrics bar chart
                 if averaged_metrics:
                     st.subheader("Averaged Metrics")
-                    fig_averaged = px.bar(
-                        st.session_state.query_results, 
-                        x=selected_chart_dimension, 
-                        y=averaged_metrics,
-                        title=""
-                    )
-                    fig_averaged.update_traces(texttemplate='%{y}', textposition='outside')
-                    fig_averaged.update_layout(
-                        showlegend=True,
-                        height=400,
-                        margin=dict(t=20)
-                    )
-                    st.plotly_chart(fig_averaged, use_container_width=True)
+                    chart_data = df.set_index(dimension_for_chart)[averaged_metrics]
+                    st.bar_chart(chart_data, use_container_width=True)
